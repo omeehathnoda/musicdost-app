@@ -115,7 +115,15 @@ export function Player({
       try {
         if (!playerReadyRef.current) {
           try {
-            await TrackPlayer.setupPlayer();
+            // TASK 1 (2026-10-03): Custom ExoPlayer buffer controls —
+            // default buffering slow/flaky networks par stall karta tha.
+            await TrackPlayer.setupPlayer({
+              maxBuffer: 50, // Max buffer size in seconds (50s)
+              minBuffer: 15, // Min buffer required before starting (15s)
+              playBuffer: 5, // Buffer needed to resume after a stall (5s)
+              backBuffer: 30, // Retain played audio for instant rewind (30s)
+              maxCacheSize: 1024 * 1024 * 100, // 100MB ExoPlayer disk cache
+            });
           } catch (setupError: any) {
             if (!setupError?.message?.includes('already been initialized')) {
               throw setupError;
@@ -313,6 +321,70 @@ export function Player({
     });
     return () => sub.remove();
   }, [isPlaying, onPlayingChange]);
+
+  // TASK 3 (2026-10-03): Silent Auth & Dynamic Stream URL Recovery.
+  // Backend token expire ho ya Render restart ho jaye to stream URL 401/403
+  // deta hai aur playback ruk jata tha. Ab: error pakdo → URL dobara
+  // resolve karo (fresh token) → last position se resume karo. Sab silent!
+  useEffect(() => {
+    let recoveringRef = false;
+    const sub = TrackPlayer.addEventListener(Event.PlaybackError, async (event: any) => {
+      if (recoveringRef) return; // already recovering — loop se bacho
+      const msg = String(event?.message || event?.code || '').toLowerCase();
+      const isAuthError =
+        msg.includes('401') || msg.includes('403') ||
+        msg.includes('unauthorized') || msg.includes('forbidden') ||
+        msg.includes('expired');
+      if (!isAuthError) return; // non-auth error — normal handling
+
+      recoveringRef = true;
+      try {
+        console.log('[auth-recovery] 401/403 detected, attempting silent recovery…');
+        const current = musicQueueRef.current?.current;
+        if (!current) return;
+
+        // Last position save karo
+        let lastPos = 0;
+        try {
+          lastPos = await TrackPlayer.getPosition();
+        } catch {}
+
+        // Stream URL dobara resolve karo (fresh token ke saath)
+        const freshUrl = await resolveTrackUrl(current);
+        if (!freshUrl || !freshUrl.startsWith('http')) {
+          // Local file hai — auth issue nahi, recovery bekar
+          return;
+        }
+
+        // Player me fresh URL load karo aur resume karo
+        const idx = await TrackPlayer.getActiveTrackIndex();
+        await TrackPlayer.load({
+          id: current.id.toString(),
+          url: freshUrl,
+          title: current.title,
+          artist: current.artist,
+          artwork: MusicAPI.getOptimalImage(current.images),
+          duration: current.duration ? Math.floor(current.duration / 1000) : undefined,
+        });
+        if (lastPos > 1) {
+          await TrackPlayer.seekTo(lastPos);
+        }
+        await TrackPlayer.play();
+        console.log('[auth-recovery] recovered! Resumed from', Math.floor(lastPos), 's');
+      } catch (e) {
+        console.warn('[auth-recovery] silent recovery failed:', e);
+        // Last resort: existing auth-expired flow (login screen)
+        try {
+          const { MusicDostAPI } = await import('../lib/musicdost-api');
+          await MusicDostAPI.logout();
+        } catch {}
+      } finally {
+        // Thoda gap do taaki rapid-fire errors loop na banayein
+        setTimeout(() => { recoveringRef = false; }, 5000);
+      }
+    });
+    return () => sub.remove();
+  }, []);
   
   useEffect(() => {
     const sub = TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
