@@ -1,0 +1,17 @@
+name: EAS Update (OTA)
+on:
+  push:
+    branches: [main]
+    paths: ['app/*','components/*','lib/*','hooks/*','locales/**','app.json','package.json']
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - run: npm install -g eas-cli
+      - run: npm install
+      - run: eas update --branch production --message "${{ github.event.head_commit.message }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
