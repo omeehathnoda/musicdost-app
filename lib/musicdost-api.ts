@@ -146,8 +146,26 @@ export class MusicDostAPI {
     const token = await this.getToken();
     const sep = path.includes('?') ? '&' : '?';
     const url = `${base}${path}${token ? `${sep}token=${encodeURIComponent(token)}` : ''}`;
-    const res = await fetch(url, init);
+    let res = await fetch(url, init);
+
+    // SILENT TOKEN REFRESH (2026-10-03): 401 aaye to turant logout mat
+    // karo — pehle ek baar silently retry karo. Transient glitch ya
+    // Render restart ke just baad ka race condition ho sakta hai.
     if (res.status === 401) {
+      console.log('[auth] 401 received, attempting silent retry before logout…');
+      try {
+        // Token dobara validate karo (backend shayad recover ho gaya ho)
+        const stillValid = await this.validateToken();
+        if (stillValid) {
+          // Retry with same token
+          res = await fetch(url, init);
+          if (res.ok) {
+            console.log('[auth] silent retry succeeded!');
+            return res.json();
+          }
+        }
+      } catch {}
+      // Silent refresh fail — ab logout + notify (existing flow)
       await this.logout();
       this.notifyAuthExpired();
       throw new MusicDostAuthError();
