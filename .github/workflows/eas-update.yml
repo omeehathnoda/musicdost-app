@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     paths: ['app/*','components/*','lib/*','hooks/*','locales/**','app.json','package.json']
+  workflow_dispatch:
 jobs:
   update:
     runs-on: ubuntu-latest
