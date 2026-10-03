@@ -61,7 +61,8 @@
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
     "expo-updates": "~0.28.18",
-    "query-string": "^9.1.0"
+    "query-string": "^9.1.0",
+    "expo-asset": "~11.1.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
