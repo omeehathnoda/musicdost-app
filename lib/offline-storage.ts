@@ -146,6 +146,66 @@ export async function isTrackCached(
 }
 
 /**
+ * TASK 2 (2026-10-03): Resilient resumable downloader with exponential
+ * backoff. downloadAsync connection drop par silently fail karta tha —
+ * ab DownloadResumable + 3 retries (2s, 4s, 8s delays).
+ */
+async function resilientDownload(
+  url: string,
+  destUri: string,
+  maxRetries = 3
+): Promise<void> {
+  const delays = [2000, 4000, 8000]; // exponential backoff
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const download = FileSystem.createDownloadResumable(url, destUri, {});
+      const result = await download.downloadAsync();
+
+      if (!result || !result.uri) {
+        throw new Error('Download failed — no result URI');
+      }
+
+      // Strict HTTP validation: sirf 200/206 accept karo.
+      // 401/403/500 par HTML error page .mp3 banke save NAHI hoga!
+      if (result.status !== 200 && result.status !== 206) {
+        throw new Error(
+          `Server error (HTTP ${result.status}) — fail explicitly, no save`
+        );
+      }
+
+      const info = await FileSystem.getInfoAsync(result.uri);
+      if (!info.exists || (info.size ?? 0) < 1024) {
+        throw new Error('Downloaded file is empty or corrupt');
+      }
+
+      return; // success!
+    } catch (e: any) {
+      lastError = e;
+      // Non-retryable: auth errors (401/403) par retry bekar hai
+      const msg = String(e?.message || '');
+      if (msg.includes('HTTP 401') || msg.includes('HTTP 403')) {
+        throw e;
+      }
+      if (attempt < maxRetries) {
+        const delay = delays[attempt] ?? 8000;
+        console.log(
+          `[resilient-download] attempt ${attempt + 1} failed, ` +
+            `retrying in ${delay}ms: ${msg.slice(0, 80)}`
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        // Partial file saaf karo taaki resume clean ho
+        try {
+          await FileSystem.deleteAsync(destUri, { idempotent: true });
+        } catch {}
+      }
+    }
+  }
+  throw lastError || new Error('Download failed after retries');
+}
+
+/**
  * Gaana background me cache karo. Fire-and-forget ke liye bana hai —
  * kabhi throw nahi karta, UI block nahi hota, koi notification nahi.
  *
@@ -185,14 +245,8 @@ export async function cacheTrackInBackground(
     cachingTrackIds.add(idStr);
     const destUri = await getCacheFileUri(track.id);
 
-    const result = await FileSystem.downloadAsync(streamUrl, destUri);
-    if (!result || result.status !== 200) {
-      throw new Error(`cache download HTTP ${result?.status}`);
-    }
-    const info = await FileSystem.getInfoAsync(destUri);
-    if (!info.exists || (info.size ?? 0) < 1024) {
-      throw new Error('cache file empty/corrupt');
-    }
+    // TASK 2: Resilient resumable download (3 retries, exponential backoff)
+    await resilientDownload(streamUrl, destUri);
 
     await saveCacheEntry(track.id, destUri);
     console.log(`[auto-cache] cached: ${track.title} — ${track.artist}`);
