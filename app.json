@@ -90,7 +90,15 @@
     "extra": {
       "router": {},
       "eas": {
+        "projectId": "5a6c4b37-f33b-4d40-8631-180210657c71"
       }
+    },
+    "owner": "opy171995",
+    "updates": {
+      "url": "https://u.expo.dev/5a6c4b37-f33b-4d40-8631-180210657c71"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
