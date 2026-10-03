@@ -60,7 +60,8 @@
     "react-native-track-player": "^4.1.2",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
-    "expo-updates": "~0.28.18"
+    "expo-updates": "~0.28.18",
+    "query-string": "^9.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
