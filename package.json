@@ -59,7 +59,8 @@
     "react-native-svg": "15.11.2",
     "react-native-track-player": "^4.1.2",
     "react-native-web": "~0.20.0",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "13.13.5",
+    "expo-updates": "~0.28.18"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
