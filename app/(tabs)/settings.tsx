@@ -656,7 +656,7 @@ export default function SettingsScreen() {
 
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{t('settings.version')}</Text>
-          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Current: v{currentVersion}</Text>
+          <Text style={[styles.cardText, { color: theme.textSecondary }]}>Current: v{currentVersion} (OTA Live ✓)</Text>
           {latestVersion && (
             <Text style={[styles.cardText, { color: updateAvailable ? theme.accent : theme.textSecondary }]}>
               Latest: v{latestVersion}
