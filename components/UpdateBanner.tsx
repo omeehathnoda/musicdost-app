@@ -6,22 +6,20 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 /**
  * UpdateBanner (2026-10-04, Om's request):
  * OTA update download hote waqt progress notification dikhao.
- * - "Checking for updates..." → "Downloading update... 45%" → "Restart to apply"
+ * - "Checking for updates..." → "Downloading update..." → "Restart to apply"
  */
 export function UpdateBanner() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== 'light';
-  const [status, setStatus] = useState<'idle' | 'checking' | 'downloading' | 'ready' | 'error'>('idle');
-  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<'idle' | 'checking' | 'downloading' | 'ready'>('idle');
 
   const checkAndDownload = useCallback(async () => {
     try {
-      if (__DEV__) return; // Dev me OTA nahi
+      if (__DEV__) return;
       setStatus('checking');
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
         setStatus('downloading');
-        setProgress(0);
         await Updates.fetchUpdateAsync();
         setStatus('ready');
       } else {
@@ -34,27 +32,7 @@ export function UpdateBanner() {
   }, []);
 
   useEffect(() => {
-    // App start par check karo
     checkAndDownload();
-
-    // Download progress events suno
-    const sub = Updates.addListener((event) => {
-      if (event.type === (Updates as any).UpdateEventType?.DOWNLOAD_STARTED) {
-        setStatus('downloading');
-        setProgress(0);
-      } else if (event.type === (Updates as any).UpdateEventType?.DOWNLOAD_PROGRESS) {
-        const ev = event as any;
-        if (ev.totalBytes && ev.totalBytes > 0) {
-          setProgress(Math.round((ev.bytesWritten / ev.totalBytes) * 100));
-        }
-      } else if (event.type === (Updates as any).UpdateEventType?.DOWNLOAD_FINISHED) {
-        setStatus('ready');
-        setProgress(100);
-      } else if (event.type === (Updates as any).UpdateEventType?.ERROR) {
-        setStatus('idle');
-      }
-    });
-    return () => sub.remove();
   }, [checkAndDownload]);
 
   const handleRestart = async () => {
@@ -83,13 +61,8 @@ export function UpdateBanner() {
         <View style={styles.row}>
           <ActivityIndicator size="small" color="#1DB954" />
           <Text style={[styles.text, { color: isDark ? '#fff' : '#111' }]}>
-            Downloading update... {progress > 0 ? `${progress}%` : ''}
+            Downloading update... please wait
           </Text>
-          {progress > 0 && (
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress}%` }]} />
-            </View>
-          )}
         </View>
       )}
       {status === 'ready' && (
@@ -125,18 +98,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     flex: 1,
-  },
-  progressBar: {
-    flex: 1,
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#1DB954',
-    borderRadius: 2,
   },
   button: {
     backgroundColor: '#1DB954',
