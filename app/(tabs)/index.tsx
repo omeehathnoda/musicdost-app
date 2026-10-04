@@ -280,9 +280,15 @@ export default function HomeScreen() {
     }
   };
 
-  const handleSearchClick = () => {
-    router.push('/search');
-  };
+  // HEADER SEARCH FIX (2026-10-04): try-catch + useCallback —
+  // navigation fail ho to app crash na ho
+  const handleSearchClick = React.useCallback(() => {
+    try {
+      router.push('/search');
+    } catch (e) {
+      console.warn('[Home] search nav failed:', e);
+    }
+  }, [router]);
 
   const handleSearchStart = () => {
     setCurrentView('search');
