@@ -26,6 +26,7 @@ import { useApiStatus } from '@/hooks/useApiStatus';
 import { useToast } from '@/hooks/useToast';
 import { MusicDostAPI, DEFAULT_SERVER_URL } from '@/lib/musicdost-api';
 import { getCacheSize, clearCache } from '@/lib/offline-storage';
+import * as Updates from 'expo-updates';
 const CURRENT_VERSION = '3.1.5';
 // Update check disabled for the MusicDost clone: the original OpenSpot
 // config lives in the upstream developer's repo and could force-redirect
@@ -657,6 +658,23 @@ export default function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>{t('settings.version')}</Text>
           <Text style={[styles.cardText, { color: theme.textSecondary }]}>Current: v{currentVersion} (OTA Live ✓)</Text>
+          {/* DYNAMIC UPDATE ID (2026-10-04): Har OTA publish par ye ID/timestamp
+              badal jata hai — isse pata chalta hai kaunsa update phone par live hai */}
+          <Text style={[styles.cardText, { color: theme.textSecondary, fontSize: 12, marginTop: 4 }]}>
+            Update ID: {Updates.updateId ? String(Updates.updateId).slice(0, 8) + '…' : 'embedded'}
+          </Text>
+          <Text style={[styles.cardText, { color: theme.textSecondary, fontSize: 12 }]}>
+            Published: {(() => {
+              try {
+                const c = (Updates as any).createdAt;
+                if (c) return new Date(c).toLocaleString();
+                const mid = Updates.manifest as any;
+                const mc = mid?.createdAt;
+                if (mc) return new Date(mc).toLocaleString();
+              } catch {}
+              return '—';
+            })()}
+          </Text>
           {latestVersion && (
             <Text style={[styles.cardText, { color: updateAvailable ? theme.accent : theme.textSecondary }]}>
               Latest: v{latestVersion}
