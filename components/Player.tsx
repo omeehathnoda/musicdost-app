@@ -73,6 +73,8 @@ export function Player({
   );
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
+  // VISIBLE DEBUG (2026-10-04): screen par dikhega — screenshot se root cause
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const [volume, setVolume] = useState(1.0);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullScreenOpen, setIsFullScreenOpen] = useState(false);
@@ -517,6 +519,8 @@ export function Player({
           // TRACK_DEBUG (2026-10-04, Om): URL aur duration log karo —
           // 0:00 freeze ka root cause yahin dikhega
           console.log('TRACK_DEBUG:', { url: currentUrl, duration: current.duration, title: current.title });
+          // Screen par dikhao taaki screenshot me dikhe
+          setDebugInfo(`URL: ${String(currentUrl).slice(0, 60)}... | Dur: ${current.duration}`);
           const currentItem = {
             id: current.id.toString(),
             url: currentUrl,
@@ -867,6 +871,11 @@ export function Player({
                     <Text style={styles.trackArtist} numberOfLines={1}>
                       {track.artist}
                     </Text>
+                    {debugInfo ? (
+                      <Text style={{ fontSize: 10, color: '#ff6b6b', marginTop: 4 }} numberOfLines={2}>
+                        🔍 {debugInfo}
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
                 <View style={styles.statusContainer}>
