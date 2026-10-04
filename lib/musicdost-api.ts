@@ -182,12 +182,26 @@ export class MusicDostAPI {
     title?: string;
     artist?: string;
     duration?: number;
-    image?: string;
+    image?: string | Array<{ link?: string; quality?: string }>;
     ytid?: string;
   }): Track {
     const title = item.title || 'Unknown';
     const artist = item.artist || 'Unknown Artist';
-    const image = item.image || '';
+    // IMAGE FIX (2026-10-04): JioSaavn kabhi image ko array bhejta hai
+    // [{link, quality}, ...] — sabse high-res link nikalo
+    let image = '';
+    const rawImg: any = (item as any).image;
+    if (typeof rawImg === 'string') {
+      image = rawImg;
+    } else if (Array.isArray(rawImg) && rawImg.length > 0) {
+      // quality se best chuno (500x500 > 150x150 > 50x50), ya last wala
+      const byQuality = [...rawImg].sort((a: any, b: any) => {
+        const qa = parseInt(String(a?.quality || '0')) || 0;
+        const qb = parseInt(String(b?.quality || '0')) || 0;
+        return qb - qa;
+      });
+      image = byQuality[0]?.link || rawImg[rawImg.length - 1]?.link || '';
+    }
     const id = item.key || `${title}|${artist}`.toLowerCase();
     return {
       id,
