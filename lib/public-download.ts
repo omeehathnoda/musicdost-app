@@ -74,7 +74,36 @@ export async function saveToPublicMusic(
     throw new Error('Storage permission denied — allow access to save music');
   }
 
-  const asset = await MediaLibrary.createAssetAsync(tempFileUri);
+  // File exist karti hai na — pehle verify karo (nahi to createAssetAsync
+  // cryptic error deta hai)
+  const fileInfo = await FileSystem.getInfoAsync(tempFileUri);
+  if (!fileInfo.exists) {
+    throw new Error('Downloaded file missing before public save');
+  }
+  if ((fileInfo.size ?? 0) < 1024) {
+    throw new Error('Downloaded file is empty or corrupt');
+  }
+
+  // FIX (2026-10-04): createAssetAsync kuch devices par pehli baar fail
+  // hota hai (MediaStore race). Ab 2 attempts, 1.5s gap.
+  let asset: MediaLibrary.Asset | null = null;
+  let lastError: any = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      asset = await MediaLibrary.createAssetAsync(tempFileUri);
+      if (asset && asset.id) break;
+      throw new Error('MediaStore did not return an asset');
+    } catch (e: any) {
+      lastError = e;
+      console.warn(`[public-download] createAsset attempt ${attempt + 1} failed:`, String(e?.message || e).slice(0, 100));
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  }
+  if (!asset || !asset.id) {
+    throw lastError || new Error('Could not save to Music folder — try again');
+  }
 
   // Best-effort: "MusicDost" album me daalo (kuch devices par album
   // audio ke liye support na ho — fail ho to bhi file Music/ me rahegi).
