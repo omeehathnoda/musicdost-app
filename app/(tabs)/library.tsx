@@ -13,7 +13,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Image } from 'expo-image';
+import { SafeImage } from '@/components/SafeImage';
 import { importSpotifyPlaylist } from '@/lib/spotify-import';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -292,7 +292,7 @@ function LibraryScreenInner() {
           />
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{t('components.tracks')}</Text>
           <FlatList
-            data={likedTracks}
+            data={(likedTracks ?? []).filter(Boolean)}
             keyExtractor={(item) => item.id.toString()}
             renderItem={({ item, index }) => {
               const isActiveTrack = currentTrack?.id?.toString() === item.id?.toString();
@@ -308,11 +308,7 @@ function LibraryScreenInner() {
                   ]}
                 >
                   <View style={styles.playlistArtWrapper}>
-                    <Image
-                      source={{ uri: item.images?.large || item.albumCover }}
-                      style={styles.playlistAlbumArt}
-                      contentFit="cover"
-                    />
+                    <SafeImage uri={item.images?.large || item.albumCover} style={styles.playlistAlbumArt} contentFit="cover" />
                     {isActiveTrack && (
                       <View style={[styles.playlistArtOverlay, { backgroundColor: '#000000aa' }]}>
                         <Ionicons
@@ -379,7 +375,7 @@ function LibraryScreenInner() {
                     onPress={() => handleSavedMediaPress(item)}
                     onLongPress={() => handleRemoveSavedMedia(`saved_${item.type}_${item.id}`)}
                   >
-                    <Image source={{ uri: item.image }} style={styles.savedMediaImage} contentFit="cover" />
+                    <SafeImage uri={item.image} style={styles.savedMediaImage} contentFit="cover" />
                     <Text style={[styles.savedMediaTitle, { color: theme.textPrimary }]} numberOfLines={2}>{item.title}</Text>
                     <Text style={[styles.savedMediaMeta, { color: theme.textSecondary }]}>{t(`media.${item.type}`)}</Text>
                     <TouchableOpacity
@@ -451,7 +447,7 @@ function LibraryScreenInner() {
           />
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{t('components.tracks')}</Text>
           <FlatList
-            data={playlistTracks}
+            data={(playlistTracks ?? []).filter(Boolean)}
             keyExtractor={(item) => item.id.toString()}
             renderItem={({ item, index }) => {
               const isActiveTrack = currentTrack?.id?.toString() === item.id?.toString();
@@ -467,11 +463,7 @@ function LibraryScreenInner() {
                   ]}
                 >
                   <View style={styles.playlistArtWrapper}>
-                    <Image
-                      source={{ uri: item.images?.large || item.albumCover }}
-                      style={styles.playlistAlbumArt}
-                      contentFit="cover"
-                    />
+                    <SafeImage uri={item.images?.large || item.albumCover} style={styles.playlistAlbumArt} contentFit="cover" />
                     {isActiveTrack && (
                       <View style={[styles.playlistArtOverlay, { backgroundColor: '#000000aa' }]}>
                         <Ionicons
