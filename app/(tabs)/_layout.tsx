@@ -14,6 +14,7 @@ import { MusicAPI } from '@/lib/music-api';
 import { useTranslation } from 'react-i18next';
 import { useConnectivity } from '@/hooks/useConnectivity';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { UpdateBanner } from '@/components/UpdateBanner';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useApiStatus } from '@/hooks/useApiStatus';
@@ -226,6 +227,7 @@ export default function TabLayout() {
       <SafeAreaView edges={['left', 'right']} style={{ flex: 1, backgroundColor: tabTheme.safeArea }}>
         <View style={{ flex: 1, position: 'relative' }}>
           {isOffline && !pathname?.includes('/downloads') && <OfflineBanner />}
+          <UpdateBanner />
           <Tabs
             screenOptions={{
               tabBarActiveTintColor: tabTheme.active,
