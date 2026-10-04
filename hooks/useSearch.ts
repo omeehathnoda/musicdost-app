@@ -36,13 +36,17 @@ export function useSearch(): UseSearchReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isLoadingMoreRef = useRef(false);
 
+  // SEARCH CRASH FIX (2026-10-04): null-safe merge — malformed items ya
+  // non-array response par 'undefined is not a function' crash rokta hai
   const mergeUniqueById = useCallback(<T extends { id: string | number }>(existing: T[], incoming: T[]) => {
-    const seen = new Set(existing.map((item) => item.id.toString()));
-    const merged = [...existing];
+    const safeExisting = Array.isArray(existing) ? existing : [];
+    const safeIncoming = Array.isArray(incoming) ? incoming : [];
+    const seen = new Set(safeExisting.map((item) => item?.id?.toString()).filter(Boolean));
+    const merged = [...safeExisting];
     let addedCount = 0;
-    for (const item of incoming) {
-      const key = item.id.toString();
-      if (!seen.has(key)) {
+    for (const item of safeIncoming) {
+      const key = item?.id?.toString();
+      if (key && !seen.has(key)) {
         seen.add(key);
         merged.push(item);
         addedCount += 1;
@@ -85,28 +89,31 @@ export function useSearch(): UseSearchReturn {
       const searchTypeToUse = type || searchType;
 
       if (currentSearchRef.current === searchQuery && !abortController.signal.aborted) {
+        // SEARCH CRASH FIX (2026-10-04): backend kabhi null/undefined bhej de
+        // to downstream .map/.filter crash na ho — hamesha array set karo
+        const asArr = <T,>(v: T[] | null | undefined): T[] => (Array.isArray(v) ? v : []);
         if (searchTypeToUse === 'track') {
-          setResults(response.tracks);
+          setResults(asArr(response?.tracks));
           setAlbums([]);
           setArtists([]);
           setPlaylists([]);
         } else if (searchTypeToUse === 'album') {
-          setAlbums(response.albums);
+          setAlbums(asArr(response?.albums));
           setResults([]);
           setArtists([]);
           setPlaylists([]);
         } else if (searchTypeToUse === 'artist') {
-          setArtists(response.artists);
+          setArtists(asArr(response?.artists));
           setResults([]);
           setAlbums([]);
           setPlaylists([]);
         } else {
-          setPlaylists(response.playlists);
+          setPlaylists(asArr(response?.playlists));
           setResults([]);
           setAlbums([]);
           setArtists([]);
         }
-        setHasMore(response.pagination.hasMore);
+        setHasMore(!!response?.pagination?.hasMore);
       }
     } catch (err) {
 
@@ -166,20 +173,20 @@ export function useSearch(): UseSearchReturn {
       if (abortController.signal.aborted) return;
 
       if (searchType === 'track') {
-        const { merged } = mergeUniqueById(results, response.tracks);
+        const { merged } = mergeUniqueById(results, response?.tracks);
         setResults(merged);
       } else if (searchType === 'album') {
-        const { merged } = mergeUniqueById(albums, response.albums);
+        const { merged } = mergeUniqueById(albums, response?.albums);
         setAlbums(merged);
       } else if (searchType === 'artist') {
-        const { merged } = mergeUniqueById(artists, response.artists);
+        const { merged } = mergeUniqueById(artists, response?.artists);
         setArtists(merged);
       } else {
-        const { merged } = mergeUniqueById(playlists, response.playlists);
+        const { merged } = mergeUniqueById(playlists, response?.playlists);
         setPlaylists(merged);
       }
       setPage(nextPage);
-      setHasMore(response.pagination.hasMore);
+      setHasMore(!!response?.pagination?.hasMore);
     } catch (err) {
       if (!abortController.signal.aborted) {
         setError(err instanceof Error ? err.message : 'Failed to load more results');
