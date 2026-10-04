@@ -495,6 +495,11 @@ export function Player({
           let currentUrl: string;
           try {
             currentUrl = await resolveTrackUrl(current);
+            // PLAYBACK FIX (2026-10-04): null/empty URL par 0:00 freeze hota tha —
+            // pehle hi validate karo aur error dikhao
+            if (!currentUrl || typeof currentUrl !== 'string' || !currentUrl.trim()) {
+              throw new Error('Stream URL empty — backend se valid URL nahi mila');
+            }
           } catch (streamError) {
             console.error('[Player] Failed to resolve stream URL:', streamError);
             await TrackPlayer.pause();
