@@ -28,6 +28,13 @@ export function SafeImage({
   ...rest
 }: SafeImageProps) {
   const [failed, setFailed] = useState(false);
+  // THUMBNAIL FIX (2026-10-04): FlatList recycling me purane failed state
+  // chipak jata tha — URI badalte hi reset karo
+  const [lastUri, setLastUri] = useState(uri);
+  if (uri !== lastUri) {
+    setLastUri(uri);
+    setFailed(false);
+  }
   const cleanUri = typeof uri === 'string' ? uri.trim() : '';
   const showFallback = failed || !cleanUri;
 
