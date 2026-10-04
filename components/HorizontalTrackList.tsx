@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { SafeImage } from './SafeImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Track } from '@/types/music';
 import { MusicAPI } from '@/lib/music-api';
@@ -37,11 +37,7 @@ export function HorizontalTrackList({ title, tracks, onTrackSelect, onAddToQueue
           activeOpacity={0.85}
         >
           <View style={styles.albumArtWrapper}>
-            <Image
-              source={{ uri: MusicAPI.getOptimalImage(item.images) }}
-              style={styles.albumArt}
-              contentFit="cover"
-            />
+            <SafeImage uri={MusicAPI.getOptimalImage(item.images)} style={styles.albumArt} contentFit="cover" />
             <TouchableOpacity
               style={[styles.playButton, { backgroundColor: accent }]}
               onPress={() => onTrackSelect(item, tracks, index)}
