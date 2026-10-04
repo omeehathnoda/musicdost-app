@@ -238,6 +238,31 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
         throw new Error('Could not get download link for this song');
       }
 
+      // DOWNLOAD FIX (2026-10-04): Stream URL valid hai ya nahi — HEAD request
+      // se verify karo. Expired/dead URL par pehle hi ruk jao, poora download
+      // waste nahi hoga.
+      try {
+        const headRes = await fetch(audioUrl, { method: 'HEAD' });
+        const len = headRes.headers.get('content-length');
+        const ctype = headRes.headers.get('content-type') || '';
+        if (!headRes.ok) {
+          throw new Error(`Stream URL dead (HTTP ${headRes.status}) — retry karo`);
+        }
+        // Audio hona chahiye, HTML error page nahi
+        if (ctype.includes('text/html')) {
+          throw new Error('Stream URL ne audio ki jagah webpage diya');
+        }
+        console.log(`[download] stream OK: ${ctype}, ${len} bytes`);
+      } catch (e: any) {
+        // HEAD fail ho to bhi ek baar download try karo (kuch servers HEAD block karte hain)
+        // Lekin clear network error ho to ruk jao
+        const msg = String(e?.message || '');
+        if (msg.includes('Network request failed') || msg.includes('dead')) {
+          throw e;
+        }
+        console.warn('[download] HEAD check skipped:', msg.slice(0, 80));
+      }
+
       // Unique temp file (track ID + timestamp — collision-proof)
       tempUri = getTempFilePath();
 
