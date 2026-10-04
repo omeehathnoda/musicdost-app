@@ -214,7 +214,24 @@ export function TopBar({
           <View style={styles.homeActions}>
             <TouchableOpacity
               style={[styles.homeSearchButton, { backgroundColor: isDark ? '#1a1a1a' : '#fffaf2' }]}
-              onPress={onSearchClick}
+              onPress={() => {
+                // HEADER SEARCH FIX (2026-10-04): 'undefined is not a function'
+                // crash — onSearchClick prop missing/undefined ho to bhi
+                // TopBar apne khud ke router se /search par le jaye
+                try {
+                  if (typeof onSearchClick === 'function') {
+                    onSearchClick();
+                    return;
+                  }
+                } catch (e) {
+                  console.warn('[TopBar] onSearchClick failed:', e);
+                }
+                try {
+                  router.push('/search');
+                } catch (e2) {
+                  console.warn('[TopBar] fallback nav failed:', e2);
+                }
+              }}
               activeOpacity={0.85}
             >
               <Ionicons name="search" size={18} color={accent} />
