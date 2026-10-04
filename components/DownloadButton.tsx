@@ -14,7 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Track } from '../types/music';
 import { PlaylistStorage } from '@/lib/playlist-storage';
-import { buildDisplayName, saveToPublicMusic } from '@/lib/public-download';
+import { buildDisplayName, saveToPublicMusic, ensureMediaLibraryPermission } from '@/lib/public-download';
+import { safeFileKey } from '@/lib/offline-storage';
 import { useTranslation } from 'react-i18next';
 import { MusicAPI } from '../lib/music-api';
 
@@ -60,10 +61,15 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
   // MediaStore) — dusre music players me DIKHEGA.
   // Pehle file app ke temp (cache dir) me download hoti hai, phir
   // MediaStore me public copy banti hai, temp delete ho jata hai.
+  //
+  // FIX (2026-10-04): temp filename me track ID + timestamp — pehle sirf
+  // "Title - Artist.mp3" tha, same naam ke 2 gaane collide karke corrupt
+  // download banate the (yehi "download fail" ki ek wajah thi).
   const getTempFilePath = useCallback(() => {
     const base = FileSystem.cacheDirectory;
     if (!base) throw new Error('Cannot access storage directory');
-    return `${base}${buildDisplayName(track)}`;
+    const key = safeFileKey(track?.id);
+    return `${base}md_dl_${key}_${Date.now()}.mp3`;
   }, [track]);
 
   useEffect(() => {
@@ -158,6 +164,45 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
   };
 
 
+  // FIX (2026-10-04): Resilient download with retry — network flakiness
+  // par pehle attempt me hi "Download failed" aa jata tha. Ab 3 attempts
+  // (2s, 4s backoff), sirf 200/206 accept, 401/403 par turant fail.
+  const resilientTempDownload = async (audioUrl: string, tempUri: string): Promise<string> => {
+    const delays = [2000, 4000];
+    let lastError: any = null;
+    for (let attempt = 0; attempt <= delays.length; attempt++) {
+      try {
+        downloadRef.current = FileSystem.createDownloadResumable(audioUrl, tempUri, {
+          sessionType: FileSystem.FileSystemSessionType.BACKGROUND,
+        });
+        const result = await downloadRef.current.downloadAsync();
+        if (!result || !result.uri) {
+          throw new Error('Download failed or was cancelled');
+        }
+        if (result.status !== 200 && result.status !== 206) {
+          throw new Error(`Server error (HTTP ${result.status})`);
+        }
+        const info = await FileSystem.getInfoAsync(result.uri);
+        if (!info.exists || (info.size ?? 0) < 1024) {
+          throw new Error('Downloaded file is empty or corrupt');
+        }
+        return result.uri;
+      } catch (e: any) {
+        lastError = e;
+        const msg = String(e?.message || '');
+        // Auth errors par retry bekar hai
+        if (msg.includes('401') || msg.includes('403')) throw e;
+        if (attempt < delays.length) {
+          console.log(`[download] attempt ${attempt + 1} failed, retrying: ${msg.slice(0, 60)}`);
+          try { await downloadRef.current?.cancelAsync(); } catch {}
+          try { await FileSystem.deleteAsync(tempUri, { idempotent: true }); } catch {}
+          await new Promise((r) => setTimeout(r, delays[attempt]));
+        }
+      }
+    }
+    throw lastError || new Error('Download failed after retries');
+  };
+
   const handleDownload = async () => {
     if (isDownloading || isDownloaded) return;
     if (!track || !track.id) {
@@ -166,6 +211,20 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
       return;
     }
 
+    // FIX (2026-10-04): Permission UP FRONT mango — pehle download shuru
+    // hota tha, phir MediaStore save par permission fail karke poora
+    // download waste ho jata tha ("Download click par fail" ki main wajah).
+    // Ab pehle hi pata chal jayega.
+    const hasPermission = await ensureMediaLibraryPermission();
+    if (!hasPermission) {
+      showNotification(
+        t('components.download_permission_needed') || 'Storage permission needed — please allow access to save music.',
+        'error'
+      );
+      return;
+    }
+
+    let tempUri: string | null = null;
     try {
       setIsDownloading(true);
       downloadingTrackIds.add(track.id.toString());
@@ -175,38 +234,26 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
 
       const trackIdStr = track.id.toString();
       const audioUrl = await MusicAPI.getDownloadUrl(trackIdStr, track);
-      // Temp file ka naam display-wala ("Title - Artist.mp3") — MediaStore
-      // isi naam se public copy banayega, taaki dusre players me sundar dikhe.
-      const tempUri = getTempFilePath();
-
-      downloadRef.current = FileSystem.createDownloadResumable(audioUrl, tempUri, { sessionType: FileSystem.FileSystemSessionType.BACKGROUND });
-      const result = await downloadRef.current.downloadAsync();
-
-      if (!result || !result.uri) {
-        throw new Error('Download failed or was cancelled');
+      if (!audioUrl || typeof audioUrl !== 'string' || !audioUrl.startsWith('http')) {
+        throw new Error('Could not get download link for this song');
       }
 
-      // FIX (2026-10-03): HTTP status check — downloadAsync() HTTP error par
-      // throw NAHI karta! Server ka error page (401/500) bhi file me save ho
-      // jata tha aur "Downloaded" notification aa jata tha. Ab status + size check.
-      if (result.status !== 200) {
-        throw new Error(`Server error (HTTP ${result.status}) — download again`);
-      }
-      const downloadedInfo = await FileSystem.getInfoAsync(result.uri);
-      if (!downloadedInfo.exists || (downloadedInfo.size ?? 0) < 1024) {
-        throw new Error('Downloaded file is empty or corrupt');
-      }
+      // Unique temp file (track ID + timestamp — collision-proof)
+      tempUri = getTempFilePath();
+
+      const downloadedUri = await resilientTempDownload(audioUrl, tempUri);
 
       // PUBLIC SAVE (2026-10-03, corrected): temp → MediaStore (Music/MusicDost/)
-      // taaki gaana dusre music players me DIKHE.
-      const pub = await saveToPublicMusic(result.uri, buildDisplayName(track));
+      // taaki gaana dusre music players me DIKHE. Display naam sundar rakho.
+      const pub = await saveToPublicMusic(downloadedUri, buildDisplayName(track));
 
       // Temp file saaf karo (public copy ban gayi)
       try {
-        await FileSystem.deleteAsync(result.uri, { idempotent: true });
+        await FileSystem.deleteAsync(downloadedUri, { idempotent: true });
       } catch {
         /* ignore */
       }
+      tempUri = null; // saaf ho gayi — finally me dobara delete ki zaroorat nahi
 
       await AsyncStorage.setItem(`offline_${track.id}`, JSON.stringify({
         fileUri: pub.uri,
@@ -220,7 +267,7 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
       await PlaylistStorage.addTrackToPlaylists(track, ['offline']);
 
       setIsDownloaded(true);
-      showNotification(t('components.downloaded') || 'Downloaded', 'success'); 
+      showNotification(t('components.downloaded') || 'Downloaded', 'success');
 
       if (onDownloaded) {
         onDownloaded(pub.uri);
@@ -236,14 +283,12 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
           await downloadRef.current.cancelAsync();
         }
         // fail par temp file saaf karo (public me kuch gaya hi nahi)
-        try {
-          const tempUri = getTempFilePath();
-          const fileInfo = await FileSystem.getInfoAsync(tempUri);
-          if (fileInfo.exists) {
-            await FileSystem.deleteAsync(tempUri);
+        if (tempUri) {
+          try {
+            await FileSystem.deleteAsync(tempUri, { idempotent: true });
+          } catch {
+            /* ignore */
           }
-        } catch {
-          /* ignore */
         }
         await AsyncStorage.removeItem(`offline_${track?.id}`);
       } catch (cleanupError) {
@@ -251,7 +296,7 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
       }
 
       const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-      showNotification(t('components.download_failed') || `Download failed: ${errorMessage}`, 'error'); // Call parent notification
+      showNotification(t('components.download_failed') || `Download failed: ${errorMessage}`, 'error');
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
