@@ -136,7 +136,7 @@ export function TopBar({
                   autoFocus={autoFocus || currentView === 'search'}
                   returnKeyType="search"
                 />
-                {query.length > 0 && (
+                {(query ?? '').length > 0 && (
                   <TouchableOpacity
                     style={styles.clearButton}
                     onPress={() => handleSearchChange('')}
@@ -147,12 +147,12 @@ export function TopBar({
                 <TouchableOpacity
                   style={styles.searchSubmitButton}
                   onPress={handleSearchSubmit}
-                  disabled={!query.trim()}
+                  disabled={!(query ?? '').trim()}
                 >
                   <Ionicons
                     name="search"
                     size={18}
-                    color={query.trim() ? accent : isDark ? "#444" : "#b8a08c"}
+                    color={(query ?? '').trim() ? accent : isDark ? "#444" : "#b8a08c"}
                   />
                 </TouchableOpacity>
               </View>
