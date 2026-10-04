@@ -24,6 +24,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FullScreenPlayer } from './FullScreenPlayer';
 import { useLikedSongs } from '../hooks/useLikedSongs';
 import { ensurePrivateDir, getCacheEntry, cacheTrackInBackground } from '../lib/offline-storage';
+import { resolveTieredUrl, tierLabel } from '../lib/tiered-playback';
+import { warmRemoteIndex } from '../lib/remote-cache-index';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { useTranslation } from 'react-i18next';
 
@@ -244,28 +246,28 @@ export function Player({
 
   
   const resolveTrackUrl = async (t: Track): Promise<string> => {
-    // 1. Manual download (PUBLIC storage — Music/MusicDost/)
+    // 3-TIER PLAYBACK (2026-10-04):
+    //   L1: App local cache (download/auto-cache) — offline instant
+    //   L2: Telegram pre-cache index — backend turant serve karta hai
+    //   L3: JioSaavn/YT search fallback via backend
     try {
-      const offlineData = await AsyncStorage.getItem(`offline_${t.id}`);
-      if (offlineData) {
-        const { fileUri } = JSON.parse(offlineData);
-        if (fileUri) {
-          const info = await FileSystem.getInfoAsync(fileUri);
-          if (info.exists) return fileUri;
-        }
-      }
-    } catch {}
-    // 2. AUTO-CACHE (PRIVATE storage — md_private/cache/): pehle cache
-    //    check karo, mile to bina internet ke instant bajao.
-    try {
-      const cached = await getCacheEntry(t.id);
-      if (cached) return cached.fileUri;
-    } catch {}
-    // 3. Stream (iske baad background me auto-cache banega)
-    return MusicAPI.getStreamUrl(t.id.toString(), t);
+      const result = await resolveTieredUrl(t);
+      console.log(`[playback] tier=${result.tier} (${tierLabel(result.tier)}) :: ${t.title}`);
+      return result.url;
+    } catch (e) {
+      // Tiered resolver fail ho to purana direct tareeka (backward compat)
+      console.warn('[playback] tiered resolve failed, direct fallback:', e);
+      return MusicAPI.getStreamUrl(t.id.toString(), t);
+    }
   };
 
   
+  // REMOTE CACHE INDEX (2026-10-04): app start par background me warm karo
+  // taaki pehle play par hi L2 (Telegram pre-cache) check ready ho.
+  useEffect(() => {
+    warmRemoteIndex();
+  }, []);
+
   const musicQueueRef = useRef(musicQueue);
   useEffect(() => {
     musicQueueRef.current = musicQueue;
