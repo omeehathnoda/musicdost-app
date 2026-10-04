@@ -24,11 +24,17 @@ interface PlaylistListProps {
 }
 
 export function PlaylistList({ playlists, onPlaylistPress, onPlaylistShuffle, onPlaylistPlay, onPlaylistLongPress, onPlaylistDelete, theme }: PlaylistListProps) {
+  // CRASH FIX (2026-10-04): corrupt/null playlist entries par
+  // playlist.name access crash karata tha. Ab defensive filter.
+  const safePlaylists = (Array.isArray(playlists) ? playlists : []).filter(
+    (pl) => pl && typeof pl === 'object' && typeof pl.name === 'string' && pl.name.length > 0
+  );
+
   return (
     <View>
-      {playlists.map((playlist, idx) => (
+      {safePlaylists.map((playlist, idx) => (
         <PlaylistCard
-          key={playlist.name + idx}
+          key={`${playlist.name}_${idx}`}
           playlist={playlist}
           onPress={() => onPlaylistPress(playlist)}
           onShuffle={onPlaylistShuffle ? () => onPlaylistShuffle(playlist) : undefined}
