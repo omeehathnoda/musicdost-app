@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeImage } from './SafeImage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -52,7 +53,7 @@ export function PlaylistCard({ playlist, onPress, onShuffle, onPlay, onLongPress
         delayLongPress={350}
         activeOpacity={0.85}
        >
-        <Image source={{ uri: safePlaylist.cover }} style={[styles.cover, theme && { borderColor: theme.border }]} resizeMode="cover" />
+        <SafeImage uri={safePlaylist?.cover} style={[styles.cover, theme && { borderColor: theme.border }]} contentFit="cover" />
         <View style={styles.info}>
           <Text style={[styles.name, theme && { color: theme.textPrimary }]} numberOfLines={1}>{safePlaylist.name}</Text>
           <Text style={[styles.count, theme && { color: theme.textSecondary }]}>{safePlaylist.trackCount} {safePlaylist.trackCount === 1 ? t('components.song') : t('components.songs')}</Text>
