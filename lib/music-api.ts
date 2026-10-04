@@ -211,6 +211,8 @@ export class MusicAPI {
     if (!url || typeof url !== 'string') return '';
     let clean = url.trim();
     if (!clean) return '';
+    // Protocol-relative URLs (//cdn...) → https
+    if (clean.startsWith('//')) clean = 'https:' + clean;
     // http -> https
     if (clean.startsWith('http://')) clean = 'https://' + clean.slice(7);
     if (!clean.startsWith('https://')) return '';
@@ -218,6 +220,14 @@ export class MusicAPI {
     if (clean.includes('jiosaavn') || clean.includes('saavncdn')) {
       clean = clean.replace(/150x150/g, '500x500').replace(/50x50/g, '500x500');
     }
+    // YouTube thumbnails: default.jpg -> hqdefault.jpg (better quality)
+    // (i.ytimg.com / img.youtube.com)
+    if (clean.includes('ytimg.com') || clean.includes('youtube.com')) {
+      clean = clean.replace(/\/default\.jpg$/i, '/hqdefault.jpg')
+                   .replace(/\/mqdefault\.jpg$/i, '/hqdefault.jpg')
+                   .replace(/\/sddefault\.jpg$/i, '/hqdefault.jpg');
+    }
+    // Spotify CDN: keep as-is (already high-res)
     return clean;
   }
 
