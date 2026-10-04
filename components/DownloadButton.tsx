@@ -243,22 +243,17 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({
 
       const downloadedUri = await resilientTempDownload(audioUrl, tempUri);
 
-      // PUBLIC SAVE (2026-10-03, corrected): temp → MediaStore (Music/MusicDost/)
-      // taaki gaana dusre music players me DIKHE. Display naam sundar rakho.
+      // PUBLIC SAVE (2026-10-04 MASTER FIX #2): temp → EK BAAR public save
+      // (SAF → Downloads/MusicDost/, fallback → Music/). Temp cleanup
+      // saveToPublicMusic ke andar hota hai. Display naam sundar rakho.
       const pub = await saveToPublicMusic(downloadedUri, buildDisplayName(track));
-
-      // Temp file saaf karo (public copy ban gayi)
-      try {
-        await FileSystem.deleteAsync(downloadedUri, { idempotent: true });
-      } catch {
-        /* ignore */
-      }
-      tempUri = null; // saaf ho gayi — finally me dobara delete ki zaroorat nahi
+      tempUri = null; // saveToPublicMusic ne temp saaf kar di — finally me dobara nahi
 
       await AsyncStorage.setItem(`offline_${track.id}`, JSON.stringify({
         fileUri: pub.uri,
         assetId: pub.assetId,
         isPublic: true,
+        savedVia: pub.via,
         thumbUri: null,
         trackData: track,
         downloadedAt: new Date().toISOString(),
