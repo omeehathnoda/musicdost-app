@@ -7,6 +7,7 @@ import { SearchResults } from '@/components/SearchResults';
 import { MusicPlayerContext } from './_layout';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useLocalSearchParams } from 'expo-router';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,7 +38,10 @@ export default function SearchScreen() {
     searchTracks(q, type as 'track' | 'album' | 'artist' | 'playlist');
   }, [params.q, params.type, setQuery, setSearchType, searchTracks]);
 
+  // SEARCH CRASH FIX (2026-10-04): ErrorBoundary — koi bhi render crash
+  // par poori screen nahi maregi, fallback UI dikhega
   return (
+    <ErrorBoundary>
     <SafeAreaView style={[styles.container, { backgroundColor: background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={background} translucent={false} />
       <TopBar
@@ -58,6 +62,7 @@ export default function SearchScreen() {
         />
       </View>
     </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
