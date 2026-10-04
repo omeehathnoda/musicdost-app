@@ -62,19 +62,25 @@ export function SearchResults({
   };
   const router = useRouter();
   const { results, albums, artists, playlists, isLoading, error, hasMore, loadMore, query, searchType } = searchState;
-  const { isLiked, toggleLike } = useLikedSongs();
+  // SEARCH CRASH FIX (2026-10-04): isLiked undefined ho to 'undefined is not a function' —
+  // hamesha function check karo
+  const likedHook = useLikedSongs();
+  const isLiked = typeof likedHook?.isLiked === 'function' ? likedHook.isLiked : () => false;
+  const toggleLike = typeof likedHook?.toggleLike === 'function' ? likedHook.toggleLike : () => {};
   const displayData =
-    searchType === 'track'
+    (searchType === 'track'
       ? results
       : searchType === 'album'
       ? albums
       : searchType === 'artist'
       ? artists
-      : playlists;
+      : playlists ?? []) ?? [];
 
   const renderTrackItem = ({ item, index }: { item: Track; index: number }) => {
-    const isCurrentTrack = currentTrack?.id === item.id;
-    const isTrackLiked = isLiked(item.id);
+    // Null item guard — corrupt data par crash nahi
+    if (!item || typeof item !== 'object') return null;
+    const isCurrentTrack = currentTrack?.id === item?.id;
+    const isTrackLiked = isLiked(item?.id);
 
     return (
       <TouchableOpacity
@@ -83,7 +89,7 @@ export function SearchResults({
           { backgroundColor: theme.surface, borderColor: theme.border },
           isCurrentTrack && [styles.currentTrackItem, { borderColor: theme.accent }],
         ]}
-        onPress={() => onTrackSelect(item, results, index)}
+        onPress={() => { try { onTrackSelect?.(item, results, index); } catch (e) { console.warn('[Search] track select failed:', e); } }}
       >
         <SafeImage uri={MusicAPI.getOptimalImage(item.images)} style={styles.albumCover} contentFit="cover" />
 
@@ -137,7 +143,7 @@ export function SearchResults({
 
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => onTrackSelect(item, results, index)}
+            onPress={() => { try { onTrackSelect?.(item, results, index); } catch (e) { console.warn('[Search] track select failed:', e); } }}
           >
             <Ionicons
               name={isCurrentTrack && isPlaying ? "pause" : "play"}
@@ -151,7 +157,8 @@ export function SearchResults({
   };
 
   const renderAlbumItem = ({ item }: { item: Album }) => {
-    const primaryArtist = item.artists.primary[0]?.name || 'Unknown';
+    if (!item || typeof item !== 'object') return null;
+    const primaryArtist = item?.artists?.primary?.[0]?.name || 'Unknown';
 
     return (
       <TouchableOpacity
@@ -186,6 +193,7 @@ export function SearchResults({
   };
 
   const renderArtistItem = ({ item }: { item: Artist }) => {
+    if (!item || typeof item !== 'object') return null;
     return (
       <TouchableOpacity
         style={[styles.albumItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -216,6 +224,7 @@ export function SearchResults({
   };
 
   const renderPlaylistItem = ({ item }: { item: PlaylistSearchItem }) => {
+    if (!item || typeof item !== 'object') return null;
     return (
       <TouchableOpacity
         style={[styles.albumItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -258,7 +267,7 @@ export function SearchResults({
     }
 
     return (
-      <TouchableOpacity style={styles.showMoreButton} onPress={loadMore} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.showMoreButton} onPress={() => { try { loadMore?.(); } catch (e) { console.warn('[Search] loadMore failed:', e); } }} activeOpacity={0.7}>
         <Text style={styles.showMoreText}>{t('components.show_more')}</Text>
       </TouchableOpacity>
     );
