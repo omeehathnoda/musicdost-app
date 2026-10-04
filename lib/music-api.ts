@@ -41,8 +41,15 @@ export class MusicAPI {
 
   static async search(params: SearchParams): Promise<SearchResponse> {
     // Hamara server: sirf track search (albums/artists/playlists khaali aate hain)
+    // BACKEND FALLBACK FIX (2026-10-04): server fail ho to khaali result, crash nahi
     if (!params.type || params.type === 'track') {
-      return MusicDostAPI.search(params);
+      try {
+        return await MusicDostAPI.search(params);
+      } catch (e) {
+        console.warn('[MusicAPI] backend search failed:', String(e)?.slice(0, 100));
+        return { tracks: [], albums: [], artists: [], playlists: [],
+                 pagination: { offset: 0, total: 0, hasMore: false } };
+      }
     }
     return {
       tracks: [],
@@ -108,8 +115,14 @@ export class MusicAPI {
 
   static async getPlaylistSongs(playlistId: string): Promise<Track[]> {
     // JioSaavn chart IDs (home language chips) -> hamare server ka trending
-    const ours = await MusicDostAPI.getPlaylistSongs(playlistId);
-    if (ours.length > 0) return ours;
+    // BACKEND FALLBACK FIX (2026-10-04): server fail/401 ho to seedha JioSaavn —
+    // pehle throw hota tha aur UI crash hoti thi
+    try {
+      const ours = await MusicDostAPI.getPlaylistSongs(playlistId);
+      if (ours.length > 0) return ours;
+    } catch (e) {
+      console.warn('[MusicAPI] backend trending failed, JioSaavn fallback:', String(e)?.slice(0, 100));
+    }
     // COMPROMISE: baaki public playlists ke liye purana JioSaavn API
     return MusicApi.getPlaylistSongs(playlistId);
   }
