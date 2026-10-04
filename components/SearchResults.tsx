@@ -7,7 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator
 } from 'react-native';
-import { Image } from 'expo-image';
+import { SafeImage } from './SafeImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Track, Album, Artist, PlaylistSearchItem } from '@/types/music';
@@ -85,11 +85,7 @@ export function SearchResults({
         ]}
         onPress={() => onTrackSelect(item, results, index)}
       >
-        <Image
-          source={{ uri: MusicAPI.getOptimalImage(item.images) }}
-          style={styles.albumCover}
-          contentFit="cover"
-        />
+        <SafeImage uri={MusicAPI.getOptimalImage(item.images)} style={styles.albumCover} contentFit="cover" />
 
         <View style={styles.trackInfo}>
           <Text
@@ -173,11 +169,7 @@ export function SearchResults({
           })
         }
       >
-        <Image
-          source={{ uri: MusicAPI.getOptimalImage(item.images) }}
-          style={styles.albumCoverLarge}
-          contentFit="cover"
-        />
+        <SafeImage uri={MusicAPI.getOptimalImage(item.images)} style={styles.albumCoverLarge} contentFit="cover" />
         <View style={styles.albumInfo}>
           <Text style={[styles.albumName, { color: theme.textPrimary }]} numberOfLines={2}>
             {item.name}
@@ -210,11 +202,7 @@ export function SearchResults({
           })
         }
       >
-        <Image
-          source={{ uri: MusicAPI.getOptimalImage(item.images) }}
-          style={styles.albumCoverLarge}
-          contentFit="cover"
-        />
+        <SafeImage uri={MusicAPI.getOptimalImage(item.images)} style={styles.albumCoverLarge} contentFit="cover" />
         <View style={styles.albumInfo}>
           <Text style={[styles.albumName, { color: theme.textPrimary }]} numberOfLines={2}>
             {item.name}
@@ -244,11 +232,7 @@ export function SearchResults({
           })
         }
       >
-        <Image
-          source={{ uri: MusicAPI.getOptimalImage(item.images) }}
-          style={styles.albumCoverLarge}
-          contentFit="cover"
-        />
+        <SafeImage uri={MusicAPI.getOptimalImage(item.images)} style={styles.albumCoverLarge} contentFit="cover" />
         <View style={styles.albumInfo}>
           <Text style={[styles.albumName, { color: theme.textPrimary }]} numberOfLines={2}>
             {item.name}
