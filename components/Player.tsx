@@ -514,6 +514,9 @@ export function Player({
             }
             return;
           }
+          // TRACK_DEBUG (2026-10-04, Om): URL aur duration log karo —
+          // 0:00 freeze ka root cause yahin dikhega
+          console.log('TRACK_DEBUG:', { url: currentUrl, duration: current.duration, title: current.title });
           const currentItem = {
             id: current.id.toString(),
             url: currentUrl,
