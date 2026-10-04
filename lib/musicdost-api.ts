@@ -205,10 +205,138 @@ export class MusicDostAPI {
   }
 
   // ---------- search ----------
+
+  /**
+   * SEARCH CLEANUP (2026-10-04) — Bot-like accuracy:
+   * Backend se aane wale raw results me duplicates aur irrelevant
+   * covers/remixes hote hain. Yahan client-side post-processing:
+   *  1. Deduplicate (normalized title+artist)
+   *  2. Cover/remix/lofi/slowed versions filter-out (unless query me hi ho)
+   *  3. Exact title + artist match ko priority score
+   *  4. Top 10 precise results return
+   */
+  private static normalizeForMatch(s: unknown): string {
+    return (typeof s === 'string' ? s : '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /** Ye words title me hon to (usually) cover/remix/fan-made version hai */
+  private static readonly JUNK_TITLE_PATTERNS: RegExp[] = [
+    /\bcover\b/i,
+    /\bremix\b/i,
+    /\bmashup\b/i,
+    /\blofi\b/i,
+    /\bslowed/i,
+    /\breverb\b/i,
+    /\bkaraoke\b/i,
+    /\binstrumental\b/i,
+    /\bunplugged\b/i,
+    /\bacoustic version\b/i,
+    /\bdj\s/i,
+    /\btiktok/i,
+    /\bring(tone|back)?\b/i,
+    /\b8d\b/i,
+    /\bnightcore\b/i,
+    /\bsped\s?up\b/i,
+  ];
+
+  private static isJunkVersion(title: string, query: string): boolean {
+    const q = this.normalizeForMatch(query);
+    // Agar user ne khud "remix" ya "cover" search kiya ho to filter mat karo
+    for (const pat of this.JUNK_TITLE_PATTERNS) {
+      if (pat.test(title)) {
+        // query me ye word hai? (jaise user ne "lofi" manga ho)
+        const word = pat.source.replace(/\\b/g, '').replace(/[^a-z]/gi, '').toLowerCase();
+        if (word.length > 2 && q.includes(word)) continue;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Relevance score: exact title match (100) + artist match (50) +
+   * title starts-with (30) + word overlap bonus. Higher = better.
+   */
+  private static scoreResult(track: Track, query: string): number {
+    const nq = this.normalizeForMatch(query);
+    const nt = this.normalizeForMatch(track.title);
+    const na = this.normalizeForMatch(track.artist);
+    if (!nq || !nt) return 0;
+
+    let score = 0;
+    // Exact title match — sabse zyada priority
+    if (nt === nq) score += 100;
+    else if (nt.startsWith(nq)) score += 40;
+    else if (nt.includes(nq)) score += 20;
+
+    // Query me artist ka naam bhi ho (jaise "tum hi ho arijit singh")
+    // to artist match bonus
+    const qWords = nq.split(' ').filter((w) => w.length > 2);
+    const tWords = new Set(nt.split(' '));
+    const aWords = new Set(na.split(' '));
+    let titleOverlap = 0;
+    let artistOverlap = 0;
+    for (const w of qWords) {
+      if (tWords.has(w)) titleOverlap++;
+      if (aWords.has(w)) artistOverlap++;
+    }
+    score += titleOverlap * 10;
+    score += artistOverlap * 15;
+
+    // Dono (title + artist) match = strong signal
+    if (titleOverlap > 0 && artistOverlap > 0) score += 25;
+
+    return score;
+  }
+
+  static cleanSearchResults(tracks: Track[], query: string): Track[] {
+    if (!Array.isArray(tracks) || tracks.length === 0) return [];
+
+    // 1. Deduplicate: normalized "title|artist" key
+    const seen = new Set<string>();
+    const deduped: Track[] = [];
+    for (const t of tracks) {
+      if (!t || t.title == null) continue;
+      const key = `${this.normalizeForMatch(t.title)}|${this.normalizeForMatch(t.artist)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(t);
+    }
+
+    // 2. Junk versions filter-out (covers/remixes/lofi — unless queried)
+    const filtered = deduped.filter(
+      (t) => !this.isJunkVersion(String(t.title || ''), query)
+    );
+    // Agar filter ke baad kuch na bache to original deduped wapas do
+    // (over-filtering se khaali result achha nahi)
+    const candidates = filtered.length > 0 ? filtered : deduped;
+
+    // 3. Score + sort: exact title+artist matches sabse upar
+    const scored = candidates.map((t) => ({
+      track: t,
+      score: this.scoreResult(t, query),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+
+    // 4. Top 10 precise results
+    return scored.slice(0, 10).map((s) => s.track);
+  }
+
   static async searchTracks(query: string): Promise<Track[]> {
     const data = await this.req(`/api/search?q=${encodeURIComponent(query)}`);
     const results = (data && data.results) || [];
-    return results.map((r: any) => this.toTrack(r));
+    const tracks = results.map((r: any) => this.toTrack(r));
+    // SEARCH CLEANUP (2026-10-04): dedupe + junk filter + prioritization
+    try {
+      return this.cleanSearchResults(tracks, query);
+    } catch (e) {
+      console.warn('[search-cleanup] failed, returning raw:', e);
+      return tracks;
+    }
   }
 
   static async search(params: SearchParams): Promise<SearchResponse> {
