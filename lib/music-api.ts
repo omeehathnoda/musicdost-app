@@ -196,7 +196,29 @@ export class MusicAPI {
   static getOptimalImage(images: { small: string; thumbnail: string; large: string } | null | undefined): string {
     // FIX (2026-10-03): corrupt track me images null/undefined ho to images.large crash karta tha
     if (!images || typeof images !== 'object') return '';
-    return images.large || images.small || images.thumbnail || '';
+    const raw = images.large || images.small || images.thumbnail || '';
+    return MusicAPI.sanitizeImageUrl(raw);
+  }
+
+  /**
+   * IMAGE URL SANITIZER (2026-10-04 MASTER FIX #1):
+   * JioSaavn/YouTube image URLs saaf karta hai:
+   * - JioSaavn: 150x150 -> 500x500 upgrade (better quality thumbnails)
+   * - http -> https upgrade (mixed-content block se bachao)
+   * - Broken/empty URLs -> '' (SafeImage placeholder dikhayega)
+   */
+  static sanitizeImageUrl(url: string | null | undefined): string {
+    if (!url || typeof url !== 'string') return '';
+    let clean = url.trim();
+    if (!clean) return '';
+    // http -> https
+    if (clean.startsWith('http://')) clean = 'https://' + clean.slice(7);
+    if (!clean.startsWith('https://')) return '';
+    // JioSaavn: low-res -> high-res (500x500)
+    if (clean.includes('jiosaavn') || clean.includes('saavncdn')) {
+      clean = clean.replace(/150x150/g, '500x500').replace(/50x50/g, '500x500');
+    }
+    return clean;
   }
 
   static isHighQuality(track: Track): boolean {
