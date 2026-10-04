@@ -15,8 +15,9 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { importSpotifyPlaylist } from '@/lib/spotify-import';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-export default function LibraryScreen() {
+function LibraryScreenInner() {
   const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -75,24 +76,50 @@ export default function LibraryScreen() {
   }, []);
 
   const handleRemoveSavedMedia = async (key: string) => {
-    await AsyncStorage.removeItem(key);
+    // CRASH FIX (2026-10-04): storage fail par crash hota tha
+    try {
+      if (!key) return;
+      await AsyncStorage.removeItem(key);
+    } catch (error) {
+      console.error('Failed to remove saved media:', error);
+    }
     fetchSavedMedia();
   };
 
   const handleSavedMediaPress = (item: any) => {
-    router.push(`/media/${item.type}/${item.id}?title=${encodeURIComponent(item.title)}&image=${encodeURIComponent(item.image)}`);
+    // CRASH FIX (2026-10-04): corrupt saved entry (bina type/id) par crash hota tha
+    try {
+      if (!item || !item.type || item.id == null) return;
+      const title = typeof item.title === 'string' ? item.title : '';
+      const image = typeof item.image === 'string' ? item.image : '';
+      router.push(`/media/${item.type}/${item.id}?title=${encodeURIComponent(title)}&image=${encodeURIComponent(image)}`);
+    } catch (error) {
+      console.error('Failed to open saved media:', error);
+    }
   };
 
   const refreshSelectedPlaylistTracks = async (playlistName: string) => {
-    const updated = (await PlaylistStorage.getPlaylists()).find(pl => pl.name === playlistName);
-    if (!updated) {
+    // CRASH FIX (2026-10-04): storage read fail par crash hota tha
+    try {
+      if (!playlistName) {
+        setSelectedPlaylist(null);
+        setPlaylistTracks([]);
+        return;
+      }
+      const updated = (await PlaylistStorage.getPlaylists()).find(pl => pl && pl.name === playlistName);
+      if (!updated) {
+        setSelectedPlaylist(null);
+        setPlaylistTracks([]);
+        return;
+      }
+      setSelectedPlaylist(updated);
+      const tracks = await PlaylistStorage.getPlaylistTracks(updated);
+      setPlaylistTracks(Array.isArray(tracks) ? tracks.filter(t => t && t.id != null) : []);
+    } catch (error) {
+      console.error('Failed to refresh playlist tracks:', error);
       setSelectedPlaylist(null);
       setPlaylistTracks([]);
-      return;
     }
-    setSelectedPlaylist(updated);
-    const tracks = await PlaylistStorage.getPlaylistTracks(updated);
-    setPlaylistTracks(tracks);
   };
 
   const fetchPlaylists = useCallback(async () => {
@@ -135,7 +162,13 @@ export default function LibraryScreen() {
   );
 
   const handlePlaylistPress = async (playlist: Playlist) => {
-    await refreshSelectedPlaylistTracks(playlist.name);
+    // CRASH FIX (2026-10-04): null playlist par crash hota tha
+    try {
+      if (!playlist || typeof playlist.name !== 'string') return;
+      await refreshSelectedPlaylistTracks(playlist.name);
+    } catch (error) {
+      console.error('Failed to open playlist:', error);
+    }
   };
 
   const handleCreatePlaylist = async () => {
@@ -214,6 +247,8 @@ export default function LibraryScreen() {
   };
 
   const handleDeletePlaylist = async (playlist: Playlist) => {
+    // CRASH FIX (2026-10-04): null playlist par crash hota tha
+    if (!playlist || typeof playlist.name !== 'string') return;
     Alert.alert(
       'Delete Playlist',
       `Are you sure you want to delete the playlist "${playlist.name}"? This cannot be undone.`,
@@ -221,10 +256,14 @@ export default function LibraryScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete', style: 'destructive', onPress: async () => {
-            const all = await PlaylistStorage.getPlaylists();
-            const updated = all.filter(pl => pl.name !== playlist.name);
-            await PlaylistStorage.savePlaylists(updated);
-            fetchPlaylists();
+            try {
+              const all = await PlaylistStorage.getPlaylists();
+              const updated = (all || []).filter(pl => pl && pl.name !== playlist.name);
+              await PlaylistStorage.savePlaylists(updated);
+              fetchPlaylists();
+            } catch (error) {
+              console.error('Failed to delete playlist:', error);
+            }
           }
         }
       ]
@@ -333,9 +372,9 @@ export default function LibraryScreen() {
             <>
               <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>{t('library.saved')}</Text>
               <View style={styles.savedMediaGrid}>
-                {savedMedia.map((item) => (
+                {(savedMedia || []).filter(item => item && typeof item === 'object').map((item, idx) => (
                   <TouchableOpacity
-                    key={`saved_${item.type}_${item.id}`}
+                    key={`saved_${item.type || 'unknown'}_${item.id || idx}`}
                     style={[styles.savedMediaItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
                     onPress={() => handleSavedMediaPress(item)}
                     onLongPress={() => handleRemoveSavedMedia(`saved_${item.type}_${item.id}`)}
@@ -569,6 +608,17 @@ export default function LibraryScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+// CRASH FIX (2026-10-04): Library tab par koi bhi unexpected render crash
+// poore app ko maar deta tha. Ab ErrorBoundary me wrap — crash par sirf
+// library section fallback dikhega, app zinda rahega.
+export default function LibraryScreen() {
+  return (
+    <ErrorBoundary>
+      <LibraryScreenInner />
+    </ErrorBoundary>
   );
 }
 
