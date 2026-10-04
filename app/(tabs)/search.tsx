@@ -14,7 +14,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function SearchScreen() {
   const searchState = useSearch();
   const { setQuery, setSearchType, searchTracks } = searchState;
-  const { handleTrackSelect, musicQueue, isPlaying, currentTrack } = useContext(MusicPlayerContext);
+  // TAB CRASH FIX (2026-10-04): context undefined ho to crash nahi
+  const playerCtx = useContext(MusicPlayerContext);
+  const handleTrackSelect = playerCtx?.handleTrackSelect ?? (() => {});
+  const musicQueue = playerCtx?.musicQueue;
+  const isPlaying = playerCtx?.isPlaying ?? false;
+  const currentTrack = playerCtx?.currentTrack ?? null;
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== 'light';
   const background = isDark ? '#050505' : '#f5efe6';
@@ -56,7 +61,7 @@ export default function SearchScreen() {
         <SearchResults
           searchState={searchState}
           onTrackSelect={handleTrackSelect}
-          onAddToQueue={musicQueue.addToQueue}
+          onAddToQueue={musicQueue?.addToQueue}
           isPlaying={isPlaying}
           currentTrack={currentTrack}
         />
