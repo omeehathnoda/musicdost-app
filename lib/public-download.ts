@@ -27,6 +27,9 @@ const MIGRATION_FLAG = 'md_public_migrated_v1';
 const PERM_GRANTED_KEY = 'md_media_perm_granted_v1';
 // FIX #2: SAF directory URI persist (user ne ek baar Downloads/MusicDost select kiya)
 const SAF_DIR_KEY = 'md_saf_downloads_dir_v1';
+// DOWNLOAD FIX (2026-10-04): User ne SAF picker cancel kiya to dobara mat poochho —
+// seedha MediaLibrary fallback use karo
+const SAF_DECLINED_KEY = 'md_saf_declined_v1';
 // Base64 copy ke liye safe limit (badi file → MediaLibrary fallback)
 const SAF_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -98,12 +101,20 @@ async function saveViaSAF(tempFileUri: string, displayName: string): Promise<Pub
       return null;
     }
 
+    // User pehle mana kar chuka hai to picker dobara mat kholo
+    const declined = await AsyncStorage.getItem(SAF_DECLINED_KEY).catch(() => null);
+    if (declined === '1') return null;
+
     let dirUri = await AsyncStorage.getItem(SAF_DIR_KEY).catch(() => null);
 
     if (!dirUri) {
       // Pehli baar: user se Downloads ke andar MusicDost folder select karwao
       const perm = await SAF.requestDirectoryPermissionsAsync();
-      if (!perm?.granted || !perm?.directoryUri) return null;
+      if (!perm?.granted || !perm?.directoryUri) {
+        // User ne cancel kiya — yaad rakho, dobara mat poochho
+        await AsyncStorage.setItem(SAF_DECLINED_KEY, '1').catch(() => {});
+        return null;
+      }
       dirUri = perm.directoryUri as string;
       await AsyncStorage.setItem(SAF_DIR_KEY, dirUri).catch(() => {});
     }
